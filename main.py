@@ -2,6 +2,7 @@ from typing import Callable
 import time
 
 from agents.agent_mtcs.mcts_z import generate_move_mcts
+from agents.agent_neural.neural_network import generate_move_neural
 from game_utils import (
     PLAYER1, PLAYER2, PLAYER1_PRINT, PLAYER2_PRINT, GameState, MoveStatus, GenMove,
     initialize_game_state, pretty_print_board, apply_player_action, check_end_state, check_move_status
@@ -78,7 +79,7 @@ if __name__ == "__main__":
     # Here, player 1 is the MCTS AI, and player 2 is the human player
     human_vs_agent(
         generate_move_1=generate_move_mcts,  # AI agent using MCTS algorithm
-        generate_move_2=user_move,  # Human agent
+        generate_move_2=generate_move_neural,  # Human agent
         player_1=player_1,
         player_2=player_2
     )
