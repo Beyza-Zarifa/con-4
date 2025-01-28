@@ -1,7 +1,7 @@
 from typing import Callable
 import time
 
-from agents.agent_mtcs.mcts import generate_move_mcts
+from agents.agent_mtcs.mcts_z import generate_move_mcts
 from game_utils import (
     PLAYER1, PLAYER2, PLAYER1_PRINT, PLAYER2_PRINT, GameState, MoveStatus, GenMove,
     initialize_game_state, pretty_print_board, apply_player_action, check_end_state, check_move_status
