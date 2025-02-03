@@ -195,28 +195,29 @@ def connected_four(board: np.ndarray, player: BoardPiece) -> bool:
     # Check horizontal lines.
     for row in range(rows):
         for col in range(cols - 3):  # Only check up to the fourth-to-last column.
-            if np.all(board[row, col:col + 4] == player):
+            if np.array_equal(board[row, col:col + 4], [player] * 4):  # Compare slice directly with player value.
                 return True
 
     # Check vertical lines.
     for col in range(cols):
         for row in range(rows - 3):  # Only check up to the fourth-to-last row.
-            if np.all(board[row:row + 4, col] == player):
+            if np.array_equal(board[row:row + 4, col], [player] * 4):  # Same logic as horizontal
                 return True
 
     # Check diagonal lines (top-left to bottom-right).
     for row in range(rows - 3):
         for col in range(cols - 3):  # Only check up to the fourth-to-last column.
-            if np.all(board[row:row + 4, col:col + 4].diagonal() == player):
+            if np.array_equal(board[row:row + 4, col:col + 4].diagonal(), [player] * 4):
                 return True
 
     # Check diagonal lines (bottom-left to top-right).
     for row in range(3, rows):
         for col in range(cols - 3):  # Only check up to the fourth-to-last column.
-            if np.all(np.fliplr(board[row - 3:row + 1, col:col + 4]).diagonal() == player):
+            if np.array_equal(np.fliplr(board[row - 3:row + 1, col:col + 4]).diagonal(), [player] * 4):
                 return True
 
     return False
+
 
 
 def check_end_state(board: np.ndarray, player: BoardPiece) -> GameState:

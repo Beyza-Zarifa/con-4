@@ -1,6 +1,7 @@
 import copy
 import numpy as np
 import math
+
 from game_utils import valid_moves, apply_player_action, check_end_state, GameState, PLAYER1, PLAYER2
 
 
@@ -105,7 +106,36 @@ class MCTSNode:
             current_node = current_node.parent
 
 
-def generate_move_mcts(board, player, save_state, iterations=2000):
+def forced_move(board, player):
+    """
+    Checks if there is a forced move (win or loss) for the current player.
+
+    :param board: The current game board state.
+    :param player: The player making the move.
+    :return: The move that forces a win or loss or None if no such move exists.
+    """
+    valid_moves_list = valid_moves(board)
+
+    # Check if any move results in a win for the current player
+    for move in valid_moves_list:
+        new_board = copy.deepcopy(board)
+        apply_player_action(new_board, move, player)
+        if check_end_state(new_board, player) == GameState.IS_WIN:
+            return move  # Found a move that leads to a win
+
+    # Check if any move results in a loss for the current player (opponent's win)
+    opponent = PLAYER1 if player == PLAYER2 else PLAYER2
+    for move in valid_moves_list:
+        new_board = copy.deepcopy(board)
+        apply_player_action(new_board, move, opponent)
+        if check_end_state(new_board, opponent) == GameState.IS_WIN:
+            return move  # Found a move that leads to a loss (avoid this move)
+
+    # No forced win or loss move, return None
+    return None
+
+
+def generate_move_mcts(board, player, save_state, iterations=1):
     """
     Generates a move using the Monte Carlo Tree Search algorithm.
 
@@ -115,6 +145,11 @@ def generate_move_mcts(board, player, save_state, iterations=2000):
     :param iterations: The number of MCTS iterations to perform.
     :return: The best move is determined by MCTS and the save_state.
     """
+
+    forced_move_result = forced_move(board, player)
+    if forced_move_result is not None:
+        return forced_move_result, save_state  # Return the forced move before MCT
+
     root = MCTSNode(board, player=player)
 
     for _ in range(iterations):
@@ -134,4 +169,4 @@ def generate_move_mcts(board, player, save_state, iterations=2000):
             node.backpropagation(result)
 
     # Return the best move found (without an exploration factor)
-    return root.best_child(0).move, save_state
+    return root.best_child().move, save_state
