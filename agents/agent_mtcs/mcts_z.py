@@ -1,6 +1,9 @@
+import math
+
 import numpy as np
 from collections import defaultdict
 from game_utils import valid_moves, apply_player_action, check_end_state, GameState
+
 
 class MCTSNode:
     """
@@ -19,15 +22,13 @@ class MCTSNode:
     def __init__(self, board, parent=None, parent_action=None):
         self.board = board
         self.parent = parent
-        self.parent_action = parent_action
         self.children = []
         self.num_visits = 0
         self.results = defaultdict(int)
         self.untried_actions = valid_moves(board)
 
     def q_value(self):
-        """Calculate the net wins for this node."""
-        return self.results[1] - self.results[-1]
+        return self.results[1] / (self.num_visits + 1e-6)
 
     def visit_count(self):
         """Get the number of visits to this node."""
@@ -44,14 +45,12 @@ class MCTSNode:
 
     def is_terminal_node(self):
         """Check if this node represents a terminal state."""
-        return (
-            check_end_state(self.board, 1) != GameState.STILL_PLAYING or
-            check_end_state(self.board, 2) != GameState.STILL_PLAYING
-        )
+        return check_end_state(self.board, 1) in [GameState.IS_WIN, GameState.IS_DRAW] or \
+            check_end_state(self.board, 2) in [GameState.IS_WIN, GameState.IS_DRAW]
 
     def rollout(self, player):
         """
-        Simulate a random playout from this node to a terminal state.
+        Simulate a random play out from this node to a terminal state.
 
         Args:
             player (int): The current player (1 or 2).
@@ -63,8 +62,8 @@ class MCTSNode:
         current_player = player
 
         while (
-            check_end_state(current_board, 1) == GameState.STILL_PLAYING and
-            check_end_state(current_board, 2) == GameState.STILL_PLAYING
+                check_end_state(self.board, 1) in [GameState.IS_WIN, GameState.IS_DRAW] and \
+                check_end_state(self.board, 2) in [GameState.IS_WIN, GameState.IS_DRAW]
         ):
             possible_moves = valid_moves(current_board)
             action = np.random.choice(possible_moves)
@@ -85,33 +84,36 @@ class MCTSNode:
         Args:
             result (int): The outcome of the simulation (1 for win, -1 for loss, 0 for draw).
         """
-        self.num_visits += 1
-        self.results[result] += 1
-        if self.parent:
-            self.parent.backpropagate(result)
+        node = self
+        while node is not None:
+            node.num_visits += 1
+            node.results[result] = node.results.get(result, 0) + 1
+            node = node.parent  # Move up the tree
 
     def is_fully_expanded(self):
         """Check if all possible actions have been tried."""
-        return len(self.untried_actions) == 0
+        return not self.untried_actions  # More Pythonic and avoids unnecessary len() call
 
-    def best_child(self, exploration_param=0.1):
+    def best_child(self, exploration_param=0.4):
         """
         Select the child node with the best UCT (Upper Confidence Bound for Trees) value.
 
         Args:
-            exploration_param (float): The exploration parameter (default is 0.1).
+            exploration_param (float): The exploration parameter (default is 0.4).
 
         Returns:
             MCTSNode: The child node with the best UCT value.
         """
-        choices_weights = [
-            (child.q_value() / (child.visit_count() + 1e-6)) +
-            exploration_param * np.sqrt(
-                (2 * np.log(self.visit_count() + 1) / (child.visit_count() + 1e-6))
+        if not self.children:
+            return None  # Edge case: If there are no children, return None (or raise an error)
+
+        best_child = max(
+            self.children,
+            key=lambda child: child.q_value() +
+                              exploration_param * np.sqrt(np.log(self.num_visits + 1) / (child.num_visits + 1e-6)
             )
-            for child in self.children
-        ]
-        return self.children[np.argmax(choices_weights)]
+        )
+        return best_child
 
     def tree_policy(self, player):
         """
@@ -126,10 +128,12 @@ class MCTSNode:
         current_node = self
         while not current_node.is_terminal_node():
             if not current_node.is_fully_expanded():
-                return current_node.expand(player)
-            else:
-                current_node = current_node.best_child()
-        return current_node
+                child = current_node.expand(player)
+                if child:  # Ensure expand() didn't return None
+                    return child
+            current_node = current_node.best_child()  # Continue to best child if fully expanded
+
+        return current_node  # Return terminal node
 
     def best_action(self, player, simulations=100):
         """
@@ -142,12 +146,41 @@ class MCTSNode:
         Returns:
             tuple: The action leading to the best outcome.
         """
-        for _ in range(simulations):
-            node_to_explore = self.tree_policy(player)
-            reward = node_to_explore.rollout(player)
-            node_to_explore.backpropagate(reward)
+        if simulations <= 0:
+            raise ValueError("Simulations must be a positive integer.")
 
-        return self.best_child(exploration_param=0).parent_action
+        for _ in range(simulations):
+            self.tree_policy(player).rollout(player)  # Directly call rollout
+            self.tree_policy(player).backpropagate(self.tree_policy(player).rollout(player))
+
+        best_child = self.best_child(exploration_param=0)  # Greedy choice (no exploration)
+        return best_child.parent_action if best_child else None  # Handle empty tree case
+
+
+def check_for_forcing_moves(board, player):
+    """
+    Check if there's an immediate winning move for the given player,
+    or if the opponent has one that needs to be blocked.
+
+    Returns:
+        move if found, else None.
+    """
+    moves = valid_moves(board)
+    # First, check for winning move for player.
+    for move in moves:
+        board_copy = board.copy()
+        apply_player_action(board_copy, move, player)
+        if check_end_state(board_copy, player) == GameState.IS_WIN:
+            return move
+    # Next, check if opponent has a winning move; if so, block it.
+    opponent = 3 - player
+    for move in moves:
+        board_copy = board.copy()
+        apply_player_action(board_copy, move, opponent)
+        if check_end_state(board_copy, opponent) == GameState.IS_WIN:
+            return move
+    return None
+
 
 def generate_move_mcts(board, player, saved_state):
     """
@@ -162,5 +195,5 @@ def generate_move_mcts(board, player, saved_state):
         tuple: The best action and the saved state (unchanged).
     """
     root = MCTSNode(board)
-    best_action = root.best_action(player)
-    return best_action, saved_state
+    move = root.best_action(player, simulations=1000)
+    return move, saved_state
