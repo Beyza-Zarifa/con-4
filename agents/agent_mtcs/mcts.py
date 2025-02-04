@@ -79,7 +79,7 @@ class MCTSNode:
         while True:
             moves = valid_moves(current_board)
             if not moves:
-                return GameState.IS_DRAW
+                return 0
 
             move = np.random.choice(moves)  # Select a random move
             apply_player_action(current_board, move, current_player)
@@ -135,7 +135,7 @@ def forced_move(board, player):
     return None
 
 
-def generate_move_mcts(board, player, save_state, iterations=1):
+def generate_move_mcts(board, player, save_state, iterations=500):
     """
     Generates a move using the Monte Carlo Tree Search algorithm.
 
